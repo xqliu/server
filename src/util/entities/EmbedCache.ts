@@ -20,6 +20,9 @@ import { BaseClass } from "./BaseClass";
 import { Entity, Column } from "typeorm";
 import { Embed } from "@spacebar/schemas";
 
+// Embed cache TTL in milliseconds (24 hours)
+const EMBED_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+
 @Entity({
     name: "embed_cache",
 })
@@ -29,4 +32,12 @@ export class EmbedCache extends BaseClass {
 
     @Column({ type: "simple-json" })
     embed: Embed;
+
+    @Column({ type: "bigint", default: () => "0" })
+    cached_at: number;
+
+    isExpired(): boolean {
+        if (!this.cached_at || this.cached_at === 0) return true;
+        return Date.now() - Number(this.cached_at) > EMBED_CACHE_TTL_MS;
+    }
 }

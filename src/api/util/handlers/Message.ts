@@ -566,9 +566,14 @@ export async function postHandleMessage(message: Message) {
             where: { url: normalizedUrl },
         });
 
-        if (cached) {
+        if (cached && !cached.isExpired()) {
             data.embeds.push(cached.embed);
             continue;
+        }
+
+        // Remove expired cache entry so we re-fetch
+        if (cached && cached.isExpired()) {
+            await cached.remove();
         }
 
         // bit gross, but whatever!
@@ -586,6 +591,7 @@ export async function postHandleMessage(message: Message) {
                 const cache = EmbedCache.create({
                     url: normalizedUrl,
                     embed: embed,
+                    cached_at: Date.now(),
                 });
                 cachePromises.push(cache.save());
                 data.embeds.push(embed);
