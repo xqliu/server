@@ -93,8 +93,14 @@ router.get("/:channel_id/:id/:filename", cache, async (req: Request, res: Respon
 
     const file = await storage.get(path);
     if (!file) throw new HTTPError("File not found");
+
+    // Prefer the content_type stored at upload time (from browser's File.type),
+    // which correctly distinguishes audio/webm from video/webm.
+    // Fall back to magic-bytes detection only when DB record is missing.
+    const dbAttachment = await CloudAttachment.findOne({ where: { id } });
+    const storedMime = dbAttachment?.contentType;
     const type = await fileTypeFromBuffer(file);
-    let content_type = type?.mime || "application/octet-stream";
+    let content_type = storedMime || type?.mime || "application/octet-stream";
 
     if (SANITIZED_CONTENT_TYPE.includes(content_type)) {
         content_type = "application/octet-stream";
