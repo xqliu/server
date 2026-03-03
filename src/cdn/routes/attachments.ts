@@ -23,6 +23,7 @@ import { HTTPError } from "lambert-server";
 import { multer } from "../util/multer";
 import { storage } from "../util/Storage";
 import { CloudAttachment } from "../../util/entities/CloudAttachment";
+import { Attachment } from "../../util/entities/Attachment";
 import { fileTypeFromBuffer } from "file-type";
 import { cache } from "../util/cache";
 
@@ -97,8 +98,10 @@ router.get("/:channel_id/:id/:filename", cache, async (req: Request, res: Respon
     // Prefer the content_type stored at upload time (from browser's File.type),
     // which correctly distinguishes audio/webm from video/webm.
     // Fall back to magic-bytes detection only when DB record is missing.
-    const dbAttachment = await CloudAttachment.findOne({ where: { id } });
-    const storedMime = dbAttachment?.contentType;
+    // Try both Attachment (legacy upload) and CloudAttachment (new cloud upload) tables
+    const legacyAtt = await Attachment.findOne({ where: { id } });
+    const cloudAtt = !legacyAtt ? await CloudAttachment.findOne({ where: { id } }) : null;
+    const storedMime = legacyAtt?.content_type || cloudAtt?.contentType;
     const type = await fileTypeFromBuffer(file);
     let content_type = storedMime || type?.mime || "application/octet-stream";
 
