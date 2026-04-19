@@ -20,7 +20,9 @@ import { WebSocket } from "@spacebar/gateway";
 import { emitEvent, PresenceUpdateEvent, PrivateSessionProjection, Session, SessionsReplace, User, VoiceState, VoiceStateUpdateEvent } from "@spacebar/util";
 
 export async function Close(this: WebSocket, code: number, reason: Buffer) {
-    console.log("[WebSocket] closed", code, reason.toString());
+    console.log(
+        `[WebSocket] closed code=${code} reason="${reason.toString()}" user=${this.user_id || "unknown"} session=${this.session_id || "unknown"} ip=${this.ipAddress || "unknown"}`,
+    );
     if (this.heartbeatTimeout) clearTimeout(this.heartbeatTimeout);
     if (this.readyTimeout) clearTimeout(this.readyTimeout);
     this.deflate?.close();

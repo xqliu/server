@@ -130,6 +130,27 @@ export async function Connection(this: WS.Server, socket: WebSocket, request: In
         socket.permissions = {};
         socket.sequence = 0;
 
+        // Server-side WebSocket ping to keep connection alive through iOS Safari,
+        // NAT, and firewalls. Browser pong responses are protocol-level (not JS),
+        // so they work even when iOS throttles JavaScript timers.
+        const PING_INTERVAL_MS = 15000;
+        socket.isAlive = true;
+        socket.on("pong", () => {
+            socket.isAlive = true;
+        });
+        socket.pingInterval = setInterval(() => {
+            if (!socket.isAlive) {
+                console.log(`[Gateway] ping timeout for ${socket.user_id || "unknown"}, closing`);
+                clearInterval(socket.pingInterval);
+                return socket.terminate();
+            }
+            socket.isAlive = false;
+            socket.ping();
+        }, PING_INTERVAL_MS);
+        socket.on("close", () => {
+            if (socket.pingInterval) clearInterval(socket.pingInterval);
+        });
+
         setHeartbeat(socket);
 
         const heartbeatInterval = parseInt(process.env.GATEWAY_HEARTBEAT_INTERVAL ?? "30000");

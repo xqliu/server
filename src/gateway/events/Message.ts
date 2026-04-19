@@ -21,6 +21,7 @@ import { ErlpackType } from "@spacebar/util";
 import fs from "fs/promises";
 import BigIntJson from "json-bigint";
 import path from "path";
+import { HTTPError } from "lambert-server";
 import WS from "ws";
 import OPCodeHandlers from "../opcodes";
 import { check } from "../opcodes/instanceOf";
@@ -95,8 +96,12 @@ export async function Message(this: WebSocket, buffer: WS.Data) {
     try {
         return await OPCodeHandler.call(this, data);
     } catch (error) {
-        console.error(`Error: Op ${data.op}`, error);
-        // if (!this.CLOSED && this.CLOSING)
-        return this.close(CLOSECODES.Unknown_error);
+        const logPrefix = `[Gateway] Op ${data.op} failed ip=${this.ipAddress || "unknown"} user=${this.user_id || "unknown"} session=${this.session_id || "unknown"}`;
+        if (error instanceof HTTPError && data.op === OPCODES.Identify) {
+            console.warn(`${logPrefix} auth rejected code=${error.code || "unknown"}: ${error.message}`);
+            return this.close(CLOSECODES.Authentication_failed, error.message || "Authentication failed");
+        }
+        console.error(`${logPrefix} unknown error`, error);
+        return this.close(CLOSECODES.Unknown_error, `op ${data.op} failed`);
     }
 }

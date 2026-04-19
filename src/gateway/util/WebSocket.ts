@@ -41,6 +41,8 @@ export interface WebSocket extends WS {
     zstdDecoder?: Decoder;
     heartbeatTimeout: NodeJS.Timeout;
     readyTimeout: NodeJS.Timeout;
+    pingInterval?: NodeJS.Timeout;
+    isAlive?: boolean;
     intents: Intents;
     sequence: number;
     permissions: Record<string, Permissions>;
