@@ -30,70 +30,78 @@ export async function Close(this: WebSocket, code: number, reason: Buffer) {
     this.removeAllListeners();
 
     if (this.session_id) {
-        await Session.delete({ session_id: this.session_id });
+        try {
+            await Session.delete({ session_id: this.session_id });
 
-        const voiceState = await VoiceState.findOne({
-            where: { user_id: this.user_id },
-        });
+            const voiceState = await VoiceState.findOne({
+                where: { user_id: this.user_id },
+            });
 
-        // clear the voice state for this session if user was in voice channel
-        if (voiceState && voiceState.session_id === this.session_id && voiceState.channel_id) {
-            const prevGuildId = voiceState.guild_id;
-            const prevChannelId = voiceState.channel_id;
+            // clear the voice state for this session if user was in voice channel
+            if (voiceState && voiceState.session_id === this.session_id && voiceState.channel_id) {
+                const prevGuildId = voiceState.guild_id;
+                const prevChannelId = voiceState.channel_id;
 
-            // @ts-expect-error channel_id is nullable
-            voiceState.channel_id = null;
-            // @ts-expect-error guild_id is nullable
-            voiceState.guild_id = null;
-            voiceState.self_stream = false;
-            voiceState.self_video = false;
-            await voiceState.save();
+                // @ts-expect-error channel_id is nullable
+                voiceState.channel_id = null;
+                // @ts-expect-error guild_id is nullable
+                voiceState.guild_id = null;
+                voiceState.self_stream = false;
+                voiceState.self_video = false;
+                await voiceState.save();
 
-            // let the users in previous guild/channel know that user disconnected
-            await emitEvent({
-                event: "VOICE_STATE_UPDATE",
-                data: {
-                    ...voiceState.toPublicVoiceState(),
-                    guild_id: prevGuildId, // have to send the previous guild_id because that's what client expects for disconnect messages
-                },
-                guild_id: prevGuildId,
-                channel_id: prevChannelId,
-            } as VoiceStateUpdateEvent);
+                // let the users in previous guild/channel know that user disconnected
+                await emitEvent({
+                    event: "VOICE_STATE_UPDATE",
+                    data: {
+                        ...voiceState.toPublicVoiceState(),
+                        guild_id: prevGuildId, // have to send the previous guild_id because that's what client expects for disconnect messages
+                    },
+                    guild_id: prevGuildId,
+                    channel_id: prevChannelId,
+                } as VoiceStateUpdateEvent);
+            }
+        } catch (error) {
+            console.warn(`[WebSocket] close cleanup failed for session=${this.session_id}`, error);
         }
     }
 
     if (this.user_id) {
-        const sessions = await Session.find({
-            where: { user_id: this.user_id },
-        });
-        await emitEvent({
-            event: "SESSIONS_REPLACE",
-            user_id: this.user_id,
-            data: sessions.map((x) => x.toPrivateGatewayDeviceInfo()),
-        } as SessionsReplace);
-        const session = sessions[0] || {
-            activities: [],
-            client_status: {},
-            status: "offline",
-        };
+        try {
+            const sessions = await Session.find({
+                where: { user_id: this.user_id },
+            });
+            await emitEvent({
+                event: "SESSIONS_REPLACE",
+                user_id: this.user_id,
+                data: sessions.map((x) => x.toPrivateGatewayDeviceInfo()),
+            } as SessionsReplace);
+            const session = sessions[0] || {
+                activities: [],
+                client_status: {},
+                status: "offline",
+            };
 
-        // TODO
-        // If a user was deleted, they may still be connected to gateway,
-        // which will cause this to throw when they disconnect.
-        // just send the ID of the user instead of the full correct payload for now
-        const userOrId = await User.getPublicUser(this.user_id).catch(() => ({
-            id: this.user_id,
-        }));
+            // TODO
+            // If a user was deleted, they may still be connected to gateway,
+            // which will cause this to throw when they disconnect.
+            // just send the ID of the user instead of the full correct payload for now
+            const userOrId = await User.getPublicUser(this.user_id).catch(() => ({
+                id: this.user_id,
+            }));
 
-        await emitEvent({
-            event: "PRESENCE_UPDATE",
-            user_id: this.user_id,
-            data: {
-                user: userOrId,
-                activities: session.activities,
-                client_status: session?.client_status,
-                status: session.getPublicStatus?.() ?? session.status,
-            },
-        } as PresenceUpdateEvent);
+            await emitEvent({
+                event: "PRESENCE_UPDATE",
+                user_id: this.user_id,
+                data: {
+                    user: userOrId,
+                    activities: session.activities,
+                    client_status: session?.client_status,
+                    status: session.getPublicStatus?.() ?? session.status,
+                },
+            } as PresenceUpdateEvent);
+        } catch (error) {
+            console.warn(`[WebSocket] presence cleanup failed for user=${this.user_id}`, error);
+        }
     }
 }
